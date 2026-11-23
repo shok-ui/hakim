@@ -1,32 +1,38 @@
-import { env } from './config/env.js';
-import { connectDatabase, disconnectDatabase } from './config/db.js';
-import { disconnectRedis } from './config/redis.js';
 import { createApp } from './app.js';
-import { startReminderScheduler } from './services/reminderService.js';
-import { logger } from './utils/logger.js';
+import { env } from './config/env.js';
+import { connectDb, disconnectDb } from './config/db.js';
+import { closeRedis } from './config/redis.js';
+import { logger } from './config/logger.js';
 
-async function main() {
-  await connectDatabase();
+const app = createApp();
+let server;
 
-  const app = createApp();
-  const server = app.listen(env.port, () =>
-    logger.info({ port: env.port, env: env.nodeEnv }, 'Hakim API listening')
-  );
-
-  startReminderScheduler();
-
-  const shutdown = async (signal) => {
-    logger.info({ signal }, 'Shutting down');
-    server.close();
-    await disconnectDatabase();
-    disconnectRedis();
-    process.exit(0);
-  };
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+async function start() {
+  await connectDb(env.mongoUri);
+  server = app.listen(env.port, () => {
+    logger.info({ port: env.port, env: env.nodeEnv }, 'Hakim API is listening');
+  });
 }
 
-main().catch((err) => {
-  logger.error({ err: err.message }, 'Failed to start Hakim API');
+async function shutdown(signal) {
+  logger.info({ signal }, 'shutting down');
+  try {
+    if (server) {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    await disconnectDb();
+    await closeRedis();
+  } catch (error) {
+    logger.error({ err: error.message }, 'error during shutdown');
+  } finally {
+    process.exit(0);
+  }
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+start().catch((error) => {
+  logger.error({ err: error.message }, 'failed to start the API');
   process.exit(1);
 });

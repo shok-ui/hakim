@@ -1,15 +1,40 @@
 import Redis from 'ioredis';
 import { env } from './env.js';
-import { logger } from '../utils/logger.js';
+import { logger } from './logger.js';
 
-export const redis = new Redis(env.redisUrl, {
-  maxRetriesPerRequest: 3,
-  retryStrategy: (times) => Math.min(times * 200, 5000)
-});
+// Redis is an optional accelerator for Hakim: it powers response caching,
+// rate limiting and the booking slot lock. The client is created lazily and
+// the connection error is logged as a warning instead of crashing the API.
+// Every consumer is expected to treat Redis failures as a soft degradation.
 
-redis.on('error', (err) => logger.error({ err: err.message }, 'Redis error'));
-redis.on('connect', () => logger.info('Redis connected'));
+let client;
 
-export function disconnectRedis() {
-  redis.disconnect();
+export function getRedis() {
+  if (!client) {
+    client = new Redis(env.redisUrl, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      retryStrategy: (times) => Math.min(times * 500, 10_000)
+    });
+    client.on('error', (error) => {
+      logger.warn({ err: error.message }, 'redis error');
+    });
+    client
+      .connect()
+      .then(() => logger.info({ url: env.redisUrl }, 'connected to Redis'))
+      .catch((error) => logger.warn({ err: error.message }, 'redis unavailable, running without cache'));
+  }
+  return client;
+}
+
+export async function closeRedis() {
+  if (!client) return;
+  const current = client;
+  client = undefined;
+  try {
+    await current.quit();
+  } catch {
+    current.disconnect();
+  }
 }

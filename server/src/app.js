@@ -1,39 +1,59 @@
+import mongoose from 'mongoose';
 import express from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
 import { env } from './config/env.js';
-import { logger } from './utils/logger.js';
-import { rateLimit } from './middleware/rateLimit.js';
+import { logger } from './config/logger.js';
+import { getRedis } from './config/redis.js';
+import authRoutes from './routes/auth.js';
+import doctorRoutes from './routes/doctors.js';
+import appointmentRoutes from './routes/appointments.js';
+import reviewRoutes from './routes/reviews.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
-import { authRoutes } from './routes/authRoutes.js';
-import { doctorRoutes } from './routes/doctorRoutes.js';
-import { appointmentRoutes } from './routes/appointmentRoutes.js';
-import { notificationRoutes } from './routes/notificationRoutes.js';
-import { adminRoutes } from './routes/adminRoutes.js';
 
+// Builds the Express application. Kept free of connections so tests and
+// smoke checks can import it safely; the HTTP server and database/Redis
+// lifecycles live in src/index.js.
 export function createApp() {
   const app = express();
 
-  app.use(helmet());
+  app.disable('x-powered-by');
   app.use(cors({ origin: env.clientOrigin }));
   app.use(express.json({ limit: '100kb' }));
 
-  // Lightweight request logging (debug level, so it is off in production).
-  app.use((req, _res, next) => {
-    logger.debug({ method: req.method, url: req.url }, 'request');
+  app.use((req, res, next) => {
+    const startedAt = Date.now();
+    res.on('finish', () => {
+      logger.info(
+        { method: req.method, url: req.originalUrl, status: res.statusCode, ms: Date.now() - startedAt },
+        'request'
+      );
+    });
     next();
   });
 
-  // Global per-IP limit for the whole API surface.
-  app.use('/api', rateLimit({ key: 'global', limit: 300, windowSeconds: 60 }));
-
-  app.get('/health', (_req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+  app.get('/api/health', async (_req, res) => {
+    const mongoUp = mongoose.connection.readyState === 1;
+    let redisUp = false;
+    try {
+      redisUp = await Promise.race([
+        getRedis().ping().then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), 300))
+      ]);
+    } catch {
+      redisUp = false;
+    }
+    res.json({
+      status: mongoUp ? 'ok' : 'degraded',
+      mongo: mongoUp ? 'up' : 'down',
+      redis: redisUp ? 'up' : 'down',
+      uptimeSeconds: Math.round(process.uptime())
+    });
+  });
 
   app.use('/api/auth', authRoutes);
   app.use('/api/doctors', doctorRoutes);
   app.use('/api/appointments', appointmentRoutes);
-  app.use('/api/notifications', notificationRoutes);
-  app.use('/api/admin', adminRoutes);
+  app.use('/api/reviews', reviewRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -1,25 +1,43 @@
-import dotenv from 'dotenv';
+import 'dotenv/config';
 
-dotenv.config();
+// Central environment handling. The API fails fast on startup when a critical
+// variable is missing so misconfigurations are caught immediately instead of
+// surfacing as runtime errors on the first request.
 
-// Loads and validates configuration from environment variables once at boot.
-const pick = (name, fallback) => {
-  const value = process.env[name] ?? fallback;
-  if (value === undefined) {
-    throw new Error(`Missing required environment variable: ${name}`);
+function readString(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  return raw;
+}
+
+function readInt(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Environment variable ${name} must be a positive integer`);
   }
-  return value;
-};
+  return parsed;
+}
+
+const nodeEnv = readString('NODE_ENV', 'development');
+
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret || jwtSecret.length < 16) {
+  throw new Error(
+    'Environment variable JWT_SECRET is missing or too short. ' +
+      'Copy server/.env.example to server/.env and set a long random value.'
+  );
+}
 
 export const env = {
-  nodeEnv: process.env.NODE_ENV ?? 'development',
-  isProd: process.env.NODE_ENV === 'production',
-  port: Number(process.env.PORT ?? 4000),
-  clientOrigin: pick('CLIENT_ORIGIN', 'http://localhost:5173'),
-  mongoUri: pick('MONGODB_URI', 'mongodb://127.0.0.1:27017/hakim'),
-  redisUrl: pick('REDIS_URL', 'redis://127.0.0.1:6379'),
-  jwtSecret: pick('JWT_SECRET', 'dev-only-secret-change-me'),
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
-  slotMinutes: Number(process.env.SLOT_MINUTES ?? 30),
-  maxBookingDaysAhead: Number(process.env.MAX_BOOKING_DAYS_AHEAD ?? 60)
+  nodeEnv,
+  isProduction: nodeEnv === 'production',
+  port: readInt('PORT', 4000),
+  mongoUri: readString('MONGODB_URI', 'mongodb://127.0.0.1:27017/hakim'),
+  redisUrl: readString('REDIS_URL', 'redis://127.0.0.1:6379'),
+  jwtSecret,
+  jwtExpiresIn: readString('JWT_EXPIRES_IN', '7d'),
+  clientOrigin: readString('CLIENT_ORIGIN', 'http://localhost:5173'),
+  cacheTtlSeconds: readInt('CACHE_TTL_SECONDS', 60)
 };
