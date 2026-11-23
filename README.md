@@ -1,8 +1,10 @@
 # Hakim
 
+![Hakim banner](docs/banner.png)
+
 Find the right doctor and book medical appointments in minutes.
 
-Hakim is a full-stack medical appointment platform. Patients discover verified doctors by specialty, city, rating and fee, check live availability and book a 30-minute visit. Doctors manage their schedule and confirm requests. Both sides get an in-app notification inbox with automatic reminders sent 24 hours before confirmed appointments.
+Hakim is a full-stack medical appointment platform. Patients discover verified doctors by specialty, city, rating and fee, check live availability and book a visit in a few clicks. Doctors manage their queue (complete visits, mark no-shows, cancel) and admins keep the directory clean. Both sides get an in-app notification inbox, and a symptom-based recommender suggests the right specialty when patients are not sure who to see.
 
 ![CI](https://github.com/shok-ui/hakim/actions/workflows/ci.yml/badge.svg)
 ![Node](https://img.shields.io/badge/Node.js-18%2B-339933?logo=nodedotjs&logoColor=white)
@@ -11,17 +13,35 @@ Hakim is a full-stack medical appointment platform. Patients discover verified d
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+## Screenshots
+
+| Home | Find doctors |
+| --- | --- |
+| ![Home page with search, specialties and top rated doctors](docs/screenshots/01-home.png) | ![Doctor directory with filters](docs/screenshots/02-find-doctors.png) |
+
+| Doctor profile and slot booking | My appointments |
+| --- | --- |
+| ![Doctor profile with live availability](docs/screenshots/03-doctor-profile.png) | ![Patient appointment history](docs/screenshots/04-my-appointments.png) |
+
+| Notifications | Admin panel |
+| --- | --- |
+| ![Notification inbox](docs/screenshots/05-notifications.png) | ![Admin platform statistics and doctor verification](docs/screenshots/06-admin-panel.png) |
+
+| Doctor dashboard | |
+| --- | --- |
+| ![Doctor daily queue](docs/screenshots/07-doctor-dashboard.png) | |
+
 ## Features
 
 - **Doctor discovery** - filter the directory by specialty, city, minimum rating and maximum fee, search by name, sort by rating, experience or price. Results are cached in Redis for fast repeat searches.
 - **Doctor profiles** - bio, years of experience, clinic address, consultation fee, verified badge and patient reviews with star ratings.
-- **Smart booking** - a clean 30-minute slot grid (09:00-17:00, Monday to Friday) generated per doctor per day. Availability is served from Redis and invalidated on every booking or cancellation.
+- **Smart booking** - each doctor defines weekly work days and a working window; the API expands it into bookable slots (30-minute by default, configurable per doctor) and disables past days, non-working days and taken slots. Availability is cached and invalidated on every booking or cancellation.
 - **Double-booking protection** - a short Redis lock turns racing requests into a clean 409, and a MongoDB partial unique index on active appointments is the final guarantee.
-- **Appointment lifecycle** - request -> confirm -> complete (or cancel by either side), with full history for patients and doctors.
-- **Notifications** - in-app inbox with an unread badge (polled once a minute) plus a scheduler that creates automatic reminders 24 hours before confirmed appointments.
+- **Appointment lifecycle** - patients book instantly into a free slot; doctors complete visits, mark no-shows or cancel, and both sides keep a full history with upcoming/past filters.
+- **Notifications** - in-app inbox with an unread badge (polled once a minute): booking confirmations for patients, cancellation alerts for doctors and profile-verification alerts.
 - **Reviews** - only patients with a completed appointment at a doctor can rate them (1-5 stars, one review per patient per doctor). Rating aggregates are stored on the doctor document.
 - **Roles** - patient, doctor and admin. New doctor profiles enter an admin verification queue before becoming public.
-- **Security** - JWT authentication, bcrypt password hashing, Helmet, role-based access control and Redis-backed rate limits (global, login, registration and booking).
+- **Security** - JWT authentication, bcrypt password hashing, role-based access control, strict input validation with Zod and Redis-backed rate limits (global, login, registration and booking).
 
 ## Architecture
 
@@ -78,8 +98,14 @@ docker run -d --name hakim-redis -p 6379:6379 redis:7-alpine
 cd server
 npm install
 cp .env.example .env
-npm run seed     # demo admin, specialties, doctors and patient
+npm run seed     # demo admin, patient and doctor accounts
 npm run dev      # http://localhost:4000
+```
+
+No MongoDB installed? The API can boot its own in-memory MongoDB and seed it automatically (demo and CI only, data resets on restart):
+
+```bash
+USE_MEMORY_DB=true npm start
 ```
 
 3. Run the client:
@@ -90,15 +116,23 @@ npm install
 npm run dev      # http://localhost:5173 (proxies /api to port 4000)
 ```
 
+For a single-process deployment build the SPA once and let the API serve it:
+
+```bash
+cd client && npm run build && cd ../server && npm start   # http://localhost:4000
+```
+
 ## Demo accounts
 
 Created by `npm run seed`:
 
 | Role | Email | Password |
 | --- | --- | --- |
-| Admin | admin@hakim.health | Admin@12345 |
-| Patient | patient@hakim.health | Patient@123 |
-| Doctor | sarah.mitchell@hakim.health (and 7 more) | Doctor@123 |
+| Admin | admin@hakim.health | Hakim#12345 |
+| Patient | patient@hakim.health | Hakim#12345 |
+| Doctor | sarah.kamali@hakim.health | Hakim#12345 |
+| Doctor | david.osei@hakim.health | Hakim#12345 |
+| Doctor | leila.farhadi@hakim.health | Hakim#12345 |
 
 ## Docker
 

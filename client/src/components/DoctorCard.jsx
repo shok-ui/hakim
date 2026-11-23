@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { RatingStars } from './RatingStars.jsx';
 
 // Directory card for the live /api/doctors payload: the doctor document
