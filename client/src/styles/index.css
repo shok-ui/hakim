@@ -631,6 +631,14 @@ a:hover {
   gap: 0.5rem;
 }
 
+/* Inline panel shown under an appointment row while rescheduling. */
+.reschedule-panel {
+  flex-basis: 100%;
+  border-top: 1px dashed var(--line);
+  padding-top: 1rem;
+  margin-top: 0.25rem;
+}
+
 /* ---------- Stats ---------- */
 
 .stat-row {

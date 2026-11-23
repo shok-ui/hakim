@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 // never lets a notification failure break a booking, a verification or any
 // other primary flow (see src/services/notification.js).
 
-const NOTIFICATION_TYPES = ['booking', 'confirmation', 'cancellation', 'verification', 'reminder'];
+const NOTIFICATION_TYPES = ['booking', 'confirmation', 'cancellation', 'verification', 'reminder', 'reschedule'];
 
 const notificationSchema = new mongoose.Schema(
   {

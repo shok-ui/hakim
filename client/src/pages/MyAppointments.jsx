@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { formatAppointmentWhen } from '../utils/format.js';
+import { SlotPicker } from '../components/SlotPicker.jsx';
 
 // Status labels for the live appointment statuses.
 const STATUS_LABELS = {
@@ -19,6 +20,7 @@ export function MyAppointments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [flash, setFlash] = useState(location.state?.booked ? 'Appointment booked.' : '');
+  const [reschedulingId, setReschedulingId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,6 +44,27 @@ export function MyAppointments() {
     try {
       await api(`/appointments/${id}/cancel`, { method: 'PATCH' });
       setFlash('Appointment cancelled.');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const startReschedule = (id) => {
+    setError('');
+    setFlash('');
+    setReschedulingId((current) => (current === id ? null : id));
+  };
+
+  const reschedule = async (id, date, startMinute) => {
+    setError('');
+    try {
+      await api(`/appointments/${id}/reschedule`, {
+        method: 'PATCH',
+        body: { date, startMinute }
+      });
+      setReschedulingId(null);
+      setFlash('Appointment rescheduled.');
       await load();
     } catch (err) {
       setError(err.message);
@@ -98,13 +121,22 @@ export function MyAppointments() {
                 <div className="appointment-actions">
                   <span className={`badge ${cls}`}>{label}</span>
                   {apt.status === 'booked' && (
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      onClick={() => cancel(apt._id)}
-                    >
-                      Cancel
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => startReschedule(apt._id)}
+                      >
+                        {reschedulingId === apt._id ? 'Close' : 'Reschedule'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={() => cancel(apt._id)}
+                      >
+                        Cancel
+                      </button>
+                    </>
                   )}
                   {apt.status === 'completed' && (
                     <Link className="btn btn-ghost" to={`/doctors/${apt.doctor?._id}`}>
@@ -112,6 +144,17 @@ export function MyAppointments() {
                     </Link>
                   )}
                 </div>
+                {reschedulingId === apt._id && (
+                  <div className="reschedule-panel">
+                    <p className="muted">
+                      Pick a new day and time slot for this visit with {apt.doctor?.name ?? 'the doctor'}.
+                    </p>
+                    <SlotPicker
+                      doctorId={apt.doctor?._id}
+                      onBook={(date, startMinute) => reschedule(apt._id, date, startMinute)}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}

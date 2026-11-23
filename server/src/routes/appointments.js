@@ -28,6 +28,11 @@ const statusSchema = z.object({
   action: z.enum(['complete', 'no-show'])
 });
 
+const rescheduleSchema = z.object({
+  date: z.string().min(1, 'date is required'),
+  startMinute: z.coerce.number().int().min(0).max(1439)
+});
+
 // POST /api/appointments - book one slot as a patient.
 // Order of guards: schedule match -> Redis slot lock -> database check ->
 // partial unique index. This layered approach keeps double bookings
@@ -222,6 +227,87 @@ router.patch(
       }
     }
 
+    res.json({ appointment: appointment.toJSON() });
+  })
+);
+
+// PATCH /api/appointments/:id/reschedule - patients move their own booked
+// appointment to another free slot with the same doctor. It reuses the same
+// layered guards as booking: date sanity, schedule match, slot lock,
+// database check, then the partial unique index as the final guarantee.
+router.patch(
+  '/:id/reschedule',
+  requireAuth,
+  requireRole('patient'),
+  validate({ body: rescheduleSchema }),
+  asyncHandler(async (req, res) => {
+    const { date, startMinute } = req.body;
+    const appointment = await loadOwnedAppointment(req);
+
+    if (String(appointment.patient) !== req.user.id) {
+      throw new ApiError(403, 'You can only reschedule your own appointments');
+    }
+    if (appointment.status !== 'booked') {
+      throw new ApiError(409, 'Only active appointments can be rescheduled');
+    }
+    if (!isValidDateStr(date) || isPastDate(date)) {
+      throw new ApiError(422, 'Appointment date must be today or later');
+    }
+
+    const doctor = await Doctor.findById(appointment.doctor);
+    if (!doctor || !doctor.isActive) {
+      throw new ApiError(404, 'Doctor not found');
+    }
+
+    if (appointment.date === date && appointment.startMinute === startMinute) {
+      throw new ApiError(422, 'The appointment already starts at this time. Pick a different slot.');
+    }
+
+    if (!isSlotInSchedule(doctor.schedule, date, startMinute)) {
+      throw new ApiError(422, 'The selected time is outside the doctor working hours');
+    }
+
+    const lockKey = `lock:slot:${appointment.doctor}:${date}:${startMinute}`;
+    const lock = await acquireLock(lockKey, 10);
+    if (lock === null) {
+      throw new ApiError(409, 'This slot was just taken. Please pick another time.');
+    }
+
+    const existing = await Appointment.findOne({
+      doctor: appointment.doctor,
+      date,
+      startMinute,
+      status: 'booked'
+    }).lean();
+    if (existing) {
+      throw new ApiError(409, 'This slot is already booked. Please pick another time.');
+    }
+
+    const previousDate = appointment.date;
+    const previousMinute = appointment.startMinute;
+    appointment.date = date;
+    appointment.startMinute = startMinute;
+    appointment.endMinute = startMinute + doctor.schedule.slotMinutes;
+    await appointment.save();
+
+    // Side effect only: a failed notification never fails the reschedule.
+    const doctorDoc = await Doctor.findById(appointment.doctor)
+      .select('name user')
+      .lean();
+    if (doctorDoc?.user) {
+      await notify({
+        userId: doctorDoc.user,
+        type: 'reschedule',
+        title: 'Appointment rescheduled',
+        body: `${doctorDoc.name} moved from ${previousDate} ${minutesToLabel(previousMinute)} to ${date} ${minutesToLabel(startMinute)}`,
+        appointmentId: appointment.id
+      });
+    }
+
+    logger.info(
+      { appointmentId: appointment.id, from: `${previousDate}:${previousMinute}`, to: `${date}:${startMinute}` },
+      'appointment rescheduled'
+    );
     res.json({ appointment: appointment.toJSON() });
   })
 );

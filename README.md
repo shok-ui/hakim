@@ -37,7 +37,7 @@ Hakim is a full-stack medical appointment platform. Patients discover verified d
 - **Doctor profiles** - bio, years of experience, clinic address, consultation fee, verified badge and patient reviews with star ratings.
 - **Smart booking** - each doctor defines weekly work days and a working window; the API expands it into bookable slots (30-minute by default, configurable per doctor) and disables past days, non-working days and taken slots. Availability is cached and invalidated on every booking or cancellation.
 - **Double-booking protection** - a short Redis lock turns racing requests into a clean 409, and a MongoDB partial unique index on active appointments is the final guarantee.
-- **Appointment lifecycle** - patients book instantly into a free slot; doctors complete visits, mark no-shows or cancel, and both sides keep a full history with upcoming/past filters.
+- **Appointment lifecycle** - patients book instantly into a free slot; doctors complete visits, mark no-shows or cancel, and both sides keep a full history with upcoming/past filters. Patients can also reschedule a booked visit into any other free slot of the same doctor.
 - **Notifications** - in-app inbox with an unread badge (polled once a minute): booking confirmations for patients, cancellation alerts for doctors and profile-verification alerts.
 - **Reviews** - only patients with a completed appointment at a doctor can rate them (1-5 stars, one review per patient per doctor). Rating aggregates are stored on the doctor document.
 - **Roles** - patient, doctor and admin. New doctor profiles enter an admin verification queue before becoming public.
