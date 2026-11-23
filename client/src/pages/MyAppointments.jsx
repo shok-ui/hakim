@@ -1,28 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api/client.js';
-import { formatDateTime } from '../utils/format.js';
+import { formatAppointmentWhen } from '../utils/format.js';
 
+// Status labels for the live appointment statuses.
 const STATUS_LABELS = {
-  pending: ['Pending', 'badge-pending'],
-  confirmed: ['Confirmed', 'badge-confirmed'],
+  booked: ['Booked', 'badge-confirmed'],
   completed: ['Completed', 'badge-completed'],
-  cancelled: ['Cancelled', 'badge-cancelled']
+  cancelled_by_patient: ['Cancelled', 'badge-cancelled'],
+  cancelled_by_clinic: ['Cancelled', 'badge-cancelled'],
+  no_show: ['No show', 'badge-cancelled']
 };
 
 export function MyAppointments() {
   const location = useLocation();
   const [scope, setScope] = useState('upcoming');
-  const [data, setData] = useState({ items: [], total: 0 });
+  const [data, setData] = useState({ items: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [flash, setFlash] = useState(location.state?.booked ? 'Appointment request sent.' : '');
+  const [flash, setFlash] = useState(location.state?.booked ? 'Appointment booked.' : '');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      setData(await api('/appointments/mine', { query: { scope, limit: 50 } }));
+      // Live API: /appointments/mine?when=upcoming|past|all
+      setData(await api('/appointments/mine', { query: { when: scope } }));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -60,8 +63,8 @@ export function MyAppointments() {
         </button>
         <button
           type="button"
-          className={scope === 'history' ? 'tab active' : 'tab'}
-          onClick={() => setScope('history')}
+          className={scope === 'past' ? 'tab active' : 'tab'}
+          onClick={() => setScope('past')}
         >
           History
         </button>
@@ -83,15 +86,18 @@ export function MyAppointments() {
               <div key={apt._id} className="appointment-row">
                 <div className="appointment-main">
                   <strong>
-                    {apt.doctor?.user?.name ?? 'Doctor'}
-                    {apt.doctor?.specialty?.name ? ` - ${apt.doctor.specialty.name}` : ''}
+                    {apt.doctor?.name ?? 'Doctor'}
+                    {apt.doctor?.specialty ? ` - ${apt.doctor.specialty}` : ''}
                   </strong>
-                  <span className="muted">{formatDateTime(apt.startAt)}</span>
+                  <span className="muted">{formatAppointmentWhen(apt)}</span>
+                  {apt.doctor?.clinicAddress && (
+                    <span className="muted">{apt.doctor.clinicAddress}</span>
+                  )}
                   {apt.reason && <span className="muted">Reason: {apt.reason}</span>}
                 </div>
                 <div className="appointment-actions">
                   <span className={`badge ${cls}`}>{label}</span>
-                  {(apt.status === 'pending' || apt.status === 'confirmed') && (
+                  {apt.status === 'booked' && (
                     <button
                       type="button"
                       className="btn btn-danger"

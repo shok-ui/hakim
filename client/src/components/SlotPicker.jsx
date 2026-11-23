@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 
-// Day tabs for the next 7 days plus the bookable slot grid for the selected
-// day. Booking is delegated to the onBook callback so pages can decide what
-// happens next (redirect, refresh, error toast).
+// Date strip for the next 14 days plus the bookable slot grid for the
+// selected day, driven by the live slot contract:
+// GET /doctors/:id/slots?date=YYYY-MM-DD -> { date, schedule, slots }
+// where each slot is { startMinute, endMinute, label, available }.
+// Booking is delegated to the onBook(date, startMinute) callback so pages
+// decide what happens next (redirect, refresh, error message).
 export function SlotPicker({ doctorId, onBook, disabled }) {
-  const days = getNextDays(7);
+  const days = getNextDays(14);
   const [activeDay, setActiveDay] = useState(days[0].iso);
   const [slots, setSlots] = useState(null);
   const [error, setError] = useState('');
-  const [busySlot, setBusySlot] = useState('');
+  const [busySlot, setBusySlot] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -33,25 +36,26 @@ export function SlotPicker({ doctorId, onBook, disabled }) {
       const data = await api(`/doctors/${doctorId}/slots`, { query: { date: activeDay } });
       setSlots(data.slots);
     } catch {
-      // Keep the previous list; the next tab switch refreshes anyway.
+      // Keep the previous list; the next day switch refreshes anyway.
     }
   };
 
-  const book = async (startAt) => {
+  const book = async (startMinute) => {
     setError('');
-    setBusySlot(startAt);
+    setBusySlot(startMinute);
     try {
-      await onBook(startAt);
+      await onBook(activeDay, startMinute);
       await refreshSlots();
     } catch (err) {
       setError(err.message);
       await refreshSlots(); // availability may have changed (e.g. slot taken)
     } finally {
-      setBusySlot('');
+      setBusySlot(null);
     }
   };
 
-  const allTaken = Array.isArray(slots) && slots.every((s) => s.taken);
+  const noSlots = Array.isArray(slots) && slots.length === 0;
+  const allTaken = Array.isArray(slots) && slots.length > 0 && slots.every((s) => !s.available);
 
   return (
     <div className="slot-picker">
@@ -73,19 +77,21 @@ export function SlotPicker({ doctorId, onBook, disabled }) {
 
       {slots === null ? (
         <p className="muted">Loading slots...</p>
+      ) : noSlots ? (
+        <p className="muted">The doctor does not work on this day. Please check another day.</p>
       ) : allTaken ? (
         <p className="muted">No free slots on this day. Please check another day.</p>
       ) : (
         <div className="slot-grid">
           {slots.map((slot) => (
             <button
-              key={slot.startAt}
+              key={slot.startMinute}
               type="button"
-              disabled={slot.taken || disabled || busySlot === slot.startAt}
-              className={slot.taken ? 'slot taken' : 'slot'}
-              onClick={() => book(slot.startAt)}
+              disabled={!slot.available || disabled || busySlot === slot.startMinute}
+              className={slot.available ? 'slot' : 'slot taken'}
+              onClick={() => book(slot.startMinute)}
             >
-              {formatTime(slot.startAt)}
+              {slot.label}
             </button>
           ))}
         </div>
@@ -97,22 +103,20 @@ export function SlotPicker({ doctorId, onBook, disabled }) {
 function getNextDays(n) {
   const days = [];
   for (let i = 0; i < n; i++) {
+    // Dates are pure UTC calendar days on the server (slot generation and the
+    // "today" cutoff both use UTC), so the day strip is built from UTC parts.
     const d = new Date();
-    d.setDate(d.getDate() + i);
+    d.setUTCDate(d.getUTCDate() + i);
     const iso = [
-      d.getFullYear(),
-      String(d.getMonth() + 1).padStart(2, '0'),
-      String(d.getDate()).padStart(2, '0')
+      d.getUTCFullYear(),
+      String(d.getUTCMonth() + 1).padStart(2, '0'),
+      String(d.getUTCDate()).padStart(2, '0')
     ].join('-');
     days.push({
       iso,
-      dow: d.toLocaleDateString('en-US', { weekday: 'short' }),
-      label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      dow: d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }),
+      label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
     });
   }
   return days;
-}
-
-function formatTime(iso) {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }

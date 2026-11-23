@@ -3,11 +3,12 @@ import { z } from 'zod';
 import Doctor from '../models/doctor.js';
 import Appointment from '../models/appointment.js';
 import { acquireLock } from '../services/cache.js';
-import { isPastDate, isValidDateStr, todayStrUtc } from '../utils/dates.js';
+import { isPastDate, isValidDateStr, minutesToLabel, todayStrUtc } from '../utils/dates.js';
 import { isSlotInSchedule } from '../services/slots.js';
 import { asyncHandler, ApiError } from '../utils/errors.js';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { notify } from '../services/notification.js';
 import { logger } from '../config/logger.js';
 
 const router = Router();
@@ -80,6 +81,15 @@ router.post(
     });
 
     await appointment.populate('doctor', 'name specialty city fee');
+
+    // Side effect only: a failed notification never fails the booking.
+    await notify({
+      userId: req.user.id,
+      type: 'booking',
+      title: 'Appointment booked',
+      body: `${doctor.name} on ${date} at ${minutesToLabel(startMinute)}`,
+      appointmentId: appointment.id
+    });
 
     logger.info({ appointmentId: appointment.id, doctorId, date, startMinute }, 'appointment booked');
     res.status(201).json({ appointment: appointment.toJSON() });
@@ -170,6 +180,7 @@ router.patch(
   requireAuth,
   asyncHandler(async (req, res) => {
     const appointment = await loadOwnedAppointment(req);
+    const previousStatus = appointment.status;
 
     if (req.user.role === 'patient') {
       if (String(appointment.patient) !== req.user.id) {
@@ -193,6 +204,24 @@ router.patch(
     }
 
     await appointment.save();
+
+    // When a patient cancels, the doctor's linked account gets a note so the
+    // freed slot is visible without opening the dashboard.
+    if (previousStatus === 'booked' && appointment.status === 'cancelled_by_patient') {
+      const doctorDoc = await Doctor.findById(appointment.doctor)
+        .select('name user')
+        .lean();
+      if (doctorDoc?.user) {
+        await notify({
+          userId: doctorDoc.user,
+          type: 'cancellation',
+          title: 'Appointment cancelled',
+          body: `${doctorDoc.name} on ${appointment.date} at ${minutesToLabel(appointment.startMinute)} was cancelled by the patient`,
+          appointmentId: appointment.id
+        });
+      }
+    }
+
     res.json({ appointment: appointment.toJSON() });
   })
 );

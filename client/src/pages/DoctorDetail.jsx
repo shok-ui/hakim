@@ -6,28 +6,48 @@ import { RatingStars } from '../components/RatingStars.jsx';
 import { SlotPicker } from '../components/SlotPicker.jsx';
 import { formatDate, initials } from '../utils/format.js';
 
+// Doctor profile against the live API:
+// GET /api/doctors/:id -> { doctor: { _id, name, specialty, city, bio,
+// education[], experienceYears, fee, clinicAddress, ratingAvg, ratingCount,
+// schedule, verified } }
+// Reviews are a separate resource:
+// GET /api/reviews/doctor/:doctorId?page=&limit= ->
+//   { items: [{ id, rating, comment, patientName, createdAt }], total, page, pages }
 export function DoctorDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [data, setData] = useState(null);
+  const [doctor, setDoctor] = useState(null);
+  const [reviews, setReviews] = useState({ items: [], total: 0, page: 1, pages: 1 });
   const [error, setError] = useState('');
+  const [bookError, setBookError] = useState('');
   const [review, setReview] = useState({ rating: 5, comment: '' });
   const [reviewMsg, setReviewMsg] = useState('');
 
   const load = useCallback(async () => {
     try {
-      setData(await api(`/doctors/${id}`));
+      const data = await api(`/doctors/${id}`);
+      setDoctor(data.doctor);
     } catch (err) {
       setError(err.message);
     }
   }, [id]);
 
+  const loadReviews = useCallback(async () => {
+    try {
+      const data = await api(`/reviews/doctor/${id}`, { query: { page: 1, limit: 10 } });
+      setReviews(data);
+    } catch {
+      // Reviews are supplementary; the profile still renders without them.
+    }
+  }, [id]);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadReviews();
+  }, [load, loadReviews]);
 
-  const book = async (startAt) => {
+  const book = async (date, startMinute) => {
     if (!user) {
       navigate('/login', { state: { from: `/doctors/${id}` } });
       return;
@@ -35,7 +55,11 @@ export function DoctorDetail() {
     if (user.role !== 'patient') {
       throw new Error('Only patient accounts can book appointments');
     }
-    await api('/appointments', { method: 'POST', body: { doctorId: id, startAt } });
+    // POST /api/appointments: { doctorId, date 'YYYY-MM-DD', startMinute, reason? }
+    await api('/appointments', {
+      method: 'POST',
+      body: { doctorId: id, date, startMinute }
+    });
     navigate('/appointments', { state: { booked: true } });
   };
 
@@ -43,10 +67,16 @@ export function DoctorDetail() {
     event.preventDefault();
     setReviewMsg('');
     try {
-      await api(`/doctors/${id}/reviews`, { method: 'POST', body: review });
+      await api('/reviews', {
+        method: 'POST',
+        body: { doctorId: id, rating: review.rating, comment: review.comment }
+      });
       setReviewMsg('Thanks for your feedback.');
       await load();
+      await loadReviews();
     } catch (err) {
+      // The server rejects reviews without a completed appointment; surface
+      // its message directly so the reason is clear.
       setReviewMsg(err.message);
     }
   };
@@ -58,7 +88,7 @@ export function DoctorDetail() {
       </div>
     );
   }
-  if (!data) {
+  if (!doctor) {
     return (
       <div className="container section">
         <p className="muted">Loading doctor profile...</p>
@@ -66,8 +96,7 @@ export function DoctorDetail() {
     );
   }
 
-  const { doctor, reviews } = data;
-  const name = doctor.user?.name ?? 'Doctor';
+  const name = doctor.name ?? 'Doctor';
 
   return (
     <div className="container section detail">
@@ -81,10 +110,10 @@ export function DoctorDetail() {
             {doctor.verified && <span className="badge badge-verified">Verified</span>}
           </h1>
           <p className="muted">
-            {doctor.specialty?.name} - {doctor.city}
+            {doctor.specialty} - {doctor.city}
           </p>
-          <RatingStars value={doctor.ratingAverage} count={doctor.ratingCount} />
-          <p className="fee">${doctor.consultationFee} per visit</p>
+          <RatingStars value={doctor.ratingAvg} count={doctor.ratingCount} />
+          <p className="fee">${doctor.fee} per visit</p>
         </div>
       </div>
 
@@ -96,6 +125,17 @@ export function DoctorDetail() {
           <h2>Experience</h2>
           <p>{doctor.experienceYears} years of practice</p>
 
+          <h2>Education</h2>
+          {Array.isArray(doctor.education) && doctor.education.length > 0 ? (
+            <ul>
+              {doctor.education.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No education details provided.</p>
+          )}
+
           {doctor.clinicAddress && (
             <>
               <h2>Clinic</h2>
@@ -103,13 +143,13 @@ export function DoctorDetail() {
             </>
           )}
 
-          <h2>Reviews ({reviews.length})</h2>
-          {reviews.length === 0 && <p className="muted">No reviews yet.</p>}
-          {reviews.map((r) => (
-            <div key={r._id} className="review">
+          <h2>Reviews ({reviews.total})</h2>
+          {reviews.items.length === 0 && <p className="muted">No reviews yet.</p>}
+          {reviews.items.map((r) => (
+            <div key={r.id} className="review">
               <RatingStars value={r.rating} />
               <p className="muted">
-                {r.patient?.name ?? 'Patient'} - {formatDate(r.createdAt)}
+                {r.patientName ?? 'Patient'} - {formatDate(r.createdAt)}
               </p>
               {r.comment && <p>{r.comment}</p>}
             </div>
@@ -118,6 +158,7 @@ export function DoctorDetail() {
           {user?.role === 'patient' && (
             <form className="review-form" onSubmit={submitReview}>
               <h3>Leave a review</h3>
+              <p className="muted">Reviews unlock after a completed visit with this doctor.</p>
               <select
                 value={review.rating}
                 onChange={(e) => setReview({ ...review, rating: Number(e.target.value) })}
@@ -145,7 +186,9 @@ export function DoctorDetail() {
 
         <aside>
           <h2>Book a visit</h2>
+          <p className="muted">Pick a day, then choose a free time slot (UTC).</p>
           <SlotPicker doctorId={id} onBook={book} />
+          {bookError && <p className="form-error">{bookError}</p>}
         </aside>
       </div>
     </div>

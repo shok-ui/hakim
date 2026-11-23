@@ -1,7 +1,9 @@
 import { RatingStars } from './RatingStars.jsx';
 
+// Directory card for the live /api/doctors payload: the doctor document
+// itself carries name, specialty (a plain string) and fee.
 export function DoctorCard({ doctor }) {
-  const name = doctor.user?.name ?? 'Doctor';
+  const name = doctor.name ?? 'Doctor';
 
   return (
     <Link to={`/doctors/${doctor._id}`} className="doctor-card">
@@ -14,17 +16,14 @@ export function DoctorCard({ doctor }) {
           .join('')}
       </div>
       <div className="doctor-card-body">
-        <h3>
-          {name}
-          {doctor.verified && <span className="badge badge-verified">Verified</span>}
-        </h3>
+        <h3>{name}</h3>
         <p className="muted">
-          {doctor.specialty?.name} - {doctor.city}
+          {doctor.specialty} - {doctor.city}
         </p>
         <p className="muted">{doctor.experienceYears} years of experience</p>
         <div className="doctor-card-foot">
-          <RatingStars value={doctor.ratingAverage} count={doctor.ratingCount} />
-          <span className="fee">${doctor.consultationFee}</span>
+          <RatingStars value={doctor.ratingAvg} count={doctor.ratingCount} />
+          <span className="fee">${doctor.fee}</span>
         </div>
       </div>
     </Link>

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { formatDate } from '../utils/format.js';
 
-// Admin view: platform stats plus verification queue for doctor profiles.
+// Admin view over the live endpoints:
+// GET /api/admin/stats -> { patients, doctors (verified), pendingDoctors, appointments }
+// GET /api/admin/doctors/pending -> { items: [{ _id, name, specialty, city,
+//   fee, createdAt, user: { email } }] }
 export function AdminPanel() {
   const [stats, setStats] = useState(null);
   const [pending, setPending] = useState([]);
@@ -81,11 +85,13 @@ export function AdminPanel() {
               {pending.map((doctor) => (
                 <div key={doctor._id} className="appointment-row">
                   <div className="appointment-main">
-                    <strong>{doctor.user?.name ?? 'Doctor'}</strong>
+                    <strong>{doctor.name ?? 'Doctor'}</strong>
                     <span className="muted">{doctor.user?.email}</span>
                     <span className="muted">
-                      {doctor.specialty?.name} - {doctor.city}
+                      {doctor.specialty} - {doctor.city}
                     </span>
+                    <span className="muted">${doctor.fee} per visit</span>
+                    <span className="muted">Submitted {formatDate(doctor.createdAt)}</span>
                   </div>
                   <div className="appointment-actions">
                     <button

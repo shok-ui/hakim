@@ -1,27 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { formatDateTime } from '../utils/format.js';
+import { formatAppointmentWhen, formatDate } from '../utils/format.js';
 
-// Doctor view: today's and upcoming requests plus simple stats.
+// Doctor view over the live /api/appointments/doctor endpoint, which returns
+// the doctor's queue with populated patient names. The queue is split here
+// into active visits (booked) and everything else (completed, cancelled,
+// no-show) instead of relying on server-side statuses that no longer exist.
 export function DoctorDashboard() {
   const { user } = useAuth();
-  const [data, setData] = useState({ items: [], total: 0 });
-  const [history, setHistory] = useState({ items: [] });
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
+
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [upcoming, past] = await Promise.all([
-        api('/appointments/mine', { query: { scope: 'upcoming', limit: 50 } }),
-        api('/appointments/mine', { query: { scope: 'history', limit: 20 } })
-      ]);
-      setData(upcoming);
-      setHistory(past);
+      const data = await api('/appointments/doctor');
+      setItems(data.items);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -33,16 +33,25 @@ export function DoctorDashboard() {
     load();
   }, [load]);
 
-  const act = (action) => async (id) => {
+  const cancel = async (id) => {
     setError('');
     try {
-      await api(`/appointments/${id}/${action}`, { method: 'PATCH' });
+      await api(`/appointments/${id}/cancel`, { method: 'PATCH' });
+      setFlash('Appointment cancelled.');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const setStatus = (action) => async (id) => {
+    setError('');
+    try {
+      await api(`/appointments/${id}/status`, { method: 'PATCH', body: { action } });
       setFlash(
-        {
-          confirm: 'Appointment confirmed. The patient has been notified.',
-          cancel: 'Appointment cancelled.',
-          complete: 'Visit completed. The patient can now leave a review.'
-        }[action]
+        action === 'complete'
+          ? 'Visit completed. The patient can now leave a review.'
+          : 'Marked as no-show.'
       );
       await load();
     } catch (err) {
@@ -50,12 +59,9 @@ export function DoctorDashboard() {
     }
   };
 
-  const pending = data.items.filter((a) => a.status === 'pending');
-  const confirmed = data.items.filter((a) => a.status === 'confirmed');
-  const today = new Date().toDateString();
-  const todayCount = data.items.filter(
-    (a) => new Date(a.startAt).toDateString() === today
-  ).length;
+  const booked = items.filter((a) => a.status === 'booked');
+  const todayCount = booked.filter((a) => a.date === todayStr).length;
+  const past = items.filter((a) => a.status !== 'booked');
 
   return (
     <div className="container section">
@@ -68,12 +74,12 @@ export function DoctorDashboard() {
           <span className="muted">visits today</span>
         </div>
         <div className="stat">
-          <span className="stat-num">{pending.length}</span>
-          <span className="muted">pending requests</span>
+          <span className="stat-num">{booked.length}</span>
+          <span className="muted">active bookings</span>
         </div>
         <div className="stat">
-          <span className="stat-num">{confirmed.length}</span>
-          <span className="muted">confirmed upcoming</span>
+          <span className="stat-num">{past.length}</span>
+          <span className="muted">closed visits</span>
         </div>
       </div>
 
@@ -84,62 +90,30 @@ export function DoctorDashboard() {
         <p className="muted">Loading schedule...</p>
       ) : (
         <>
-          <h2>Pending requests</h2>
-          {pending.length === 0 ? (
-            <p className="muted">No pending requests right now.</p>
+          <h2>Active bookings</h2>
+          {booked.length === 0 ? (
+            <p className="muted">No active bookings right now.</p>
           ) : (
             <div className="appointment-list">
-              {pending.map((apt) => (
+              {booked.map((apt) => (
                 <div key={apt._id} className="appointment-row">
                   <div className="appointment-main">
                     <strong>{apt.patient?.name ?? 'Patient'}</strong>
-                    <span className="muted">{formatDateTime(apt.startAt)}</span>
+                    <span className="muted">{formatAppointmentWhen(apt)}</span>
                     {apt.reason && <span className="muted">Reason: {apt.reason}</span>}
                   </div>
                   <div className="appointment-actions">
                     <button
                       type="button"
-                      className="btn btn-primary"
-                      onClick={() => act('confirm')(apt._id)}
-                    >
-                      Confirm
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      onClick={() => act('cancel')(apt._id)}
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <h2>Confirmed upcoming</h2>
-          {confirmed.length === 0 ? (
-            <p className="muted">Nothing confirmed yet.</p>
-          ) : (
-            <div className="appointment-list">
-              {confirmed.map((apt) => (
-                <div key={apt._id} className="appointment-row">
-                  <div className="appointment-main">
-                    <strong>{apt.patient?.name ?? 'Patient'}</strong>
-                    <span className="muted">{formatDateTime(apt.startAt)}</span>
-                  </div>
-                  <div className="appointment-actions">
-                    <button
-                      type="button"
                       className="btn btn-ghost"
-                      onClick={() => act('complete')(apt._id)}
+                      onClick={() => setStatus('complete')(apt._id)}
                     >
                       Mark completed
                     </button>
                     <button
                       type="button"
                       className="btn btn-danger"
-                      onClick={() => act('cancel')(apt._id)}
+                      onClick={() => cancel(apt._id)}
                     >
                       Cancel
                     </button>
@@ -149,24 +123,26 @@ export function DoctorDashboard() {
             </div>
           )}
 
-          <h2>Recent history</h2>
-          {history.items.length === 0 ? (
+          <h2>Visit history</h2>
+          {past.length === 0 ? (
             <p className="muted">No past appointments yet.</p>
           ) : (
             <div className="appointment-list">
-              {history.items.slice(0, 10).map((apt) => (
+              {past.slice(0, 20).map((apt) => (
                 <div key={apt._id} className="appointment-row">
                   <div className="appointment-main">
                     <strong>{apt.patient?.name ?? 'Patient'}</strong>
-                    <span className="muted">{formatDateTime(apt.startAt)}</span>
+                    <span className="muted">{formatAppointmentWhen(apt)}</span>
                   </div>
                   <div className="appointment-actions">
-                    <span className={`badge badge-${apt.status}`}>{apt.status}</span>
+                    <span className="badge badge-pending">{apt.status.replaceAll('_', ' ')}</span>
                   </div>
                 </div>
               ))}
             </div>
           )}
+
+          <p className="muted">Today is {formatDate(todayStr)} (UTC). Times are shown in UTC.</p>
         </>
       )}
     </div>

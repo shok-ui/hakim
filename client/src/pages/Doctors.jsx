@@ -4,7 +4,8 @@ import { api } from '../api/client.js';
 import { DoctorCard } from '../components/DoctorCard.jsx';
 
 // Doctor directory with filters, sorting and pagination. Initial filter values
-// can arrive from the home page search form.
+// can arrive from the home page search form. The live list API supports
+// q (name search), specialty, city, minRating, sort and page/limit.
 export function Doctors() {
   const location = useLocation();
   const initial = location.state ?? {};
@@ -12,13 +13,12 @@ export function Doctors() {
   const [specialties, setSpecialties] = useState([]);
   const [filters, setFilters] = useState({
     specialty: initial.specialty ?? '',
-    city: initial.city ?? '',
-    search: '',
+    city: '',
+    q: '',
     minRating: '',
-    maxFee: '',
     sort: 'rating'
   });
-  const [data, setData] = useState({ items: [], total: 0, page: 1, limit: 12 });
+  const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,7 +34,15 @@ export function Doctors() {
       setError('');
       try {
         const result = await api('/doctors', {
-          query: { ...filters, page, limit: data.limit }
+          query: {
+            specialty: filters.specialty,
+            city: filters.city,
+            q: filters.q,
+            minRating: filters.minRating,
+            sort: filters.sort,
+            page,
+            limit: 12
+          }
         });
         setData(result);
       } catch (err) {
@@ -43,7 +51,7 @@ export function Doctors() {
         setLoading(false);
       }
     },
-    [filters, data.limit]
+    [filters]
   );
 
   useEffect(() => {
@@ -53,7 +61,7 @@ export function Doctors() {
   const set = (field) => (event) =>
     setFilters((prev) => ({ ...prev, [field]: event.target.value }));
 
-  const totalPages = Math.max(1, Math.ceil(data.total / data.limit));
+  const totalPages = data.pages ?? Math.max(1, Math.ceil(data.total / 12));
 
   return (
     <div className="container section">
@@ -63,8 +71,8 @@ export function Doctors() {
         <select value={filters.specialty} onChange={set('specialty')} aria-label="Specialty">
           <option value="">All specialties</option>
           {specialties.map((s) => (
-            <option key={s._id} value={s._id}>
-              {s.name}
+            <option key={s} value={s}>
+              {s}
             </option>
           ))}
         </select>
@@ -78,8 +86,8 @@ export function Doctors() {
         <input
           type="text"
           placeholder="Doctor name"
-          value={filters.search}
-          onChange={set('search')}
+          value={filters.q}
+          onChange={set('q')}
           aria-label="Doctor name"
         />
         <select value={filters.minRating} onChange={set('minRating')} aria-label="Minimum rating">
@@ -87,19 +95,11 @@ export function Doctors() {
           <option value="4">4 stars and up</option>
           <option value="3">3 stars and up</option>
         </select>
-        <input
-          type="number"
-          min="0"
-          placeholder="Max fee ($)"
-          value={filters.maxFee}
-          onChange={set('maxFee')}
-          aria-label="Maximum fee"
-        />
         <select value={filters.sort} onChange={set('sort')} aria-label="Sort by">
           <option value="rating">Top rated</option>
           <option value="experience">Most experienced</option>
-          <option value="feeAsc">Lowest fee</option>
-          <option value="feeDesc">Highest fee</option>
+          <option value="fee_asc">Lowest fee</option>
+          <option value="fee_desc">Highest fee</option>
         </select>
       </div>
 

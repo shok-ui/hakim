@@ -35,6 +35,9 @@ export const env = {
   isProduction: nodeEnv === 'production',
   port: readInt('PORT', 4000),
   mongoUri: readString('MONGODB_URI', 'mongodb://127.0.0.1:27017/hakim'),
+  // USE_MEMORY_DB=true spins up an ephemeral MongoDB (mongodb-memory-server)
+  // instead of requiring a real mongod. Used for sandboxes and demos.
+  useMemoryDb: process.env.USE_MEMORY_DB === 'true',
   redisUrl: readString('REDIS_URL', 'redis://127.0.0.1:6379'),
   jwtSecret,
   jwtExpiresIn: readString('JWT_EXPIRES_IN', '7d'),

@@ -8,7 +8,10 @@ import Doctor from '../models/doctor.js';
 
 // Idempotent development seed. Running it repeatedly updates the same
 // documents instead of duplicating them, which makes it safe to use in
-// demos, CI pipelines and local onboarding.
+// demos, CI pipelines and local onboarding. seedAll() only touches the
+// database through the existing mongoose connection; the CLI wrapper at
+// the bottom owns connect/disconnect so the same function can also run
+// inside the API process in in-memory MongoDB mode.
 
 const ACCOUNT_PASSWORD = 'Hakim#12345';
 
@@ -123,6 +126,10 @@ const DIRECTORY_DOCTORS = [
   }
 ];
 
+// Exactly two directory-only profiles start unverified so the admin panel
+// has items in its verification queue on a fresh database.
+const PENDING_DOCTOR_NAMES = ['Dr. Ivan Petrov', 'Dr. Julia Santos'];
+
 const LINKED_DOCTORS = [
   {
     account: DOCTOR_USERS[0],
@@ -179,16 +186,20 @@ async function upsertUser({ name, email, role }) {
 
 async function upsertDoctor(directory, linkedUserId) {
   const { name } = directory;
+  // The moderation state is reset on every seed run so the verification
+  // queue is always reproducible for demos.
+  const verified = PENDING_DOCTOR_NAMES.includes(name) ? false : true;
   return Doctor.findOneAndUpdate(
     { name },
-    { ...directory, user: linkedUserId ?? null, isActive: true },
+    { ...directory, verified, user: linkedUserId ?? null, isActive: true },
     { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true }
   );
 }
 
-async function main() {
-  await connectDb(env.mongoUri);
-
+// Populates the database with demo accounts and the doctor directory.
+// Expects an open mongoose connection (see the CLI wrapper below and
+// src/index.js for the two supported ways of getting there).
+export async function seedAll() {
   const admin = await upsertUser({ name: 'Hakim Admin', email: 'admin@hakim.health', role: 'admin' });
   const patient = await upsertUser({ name: 'Demo Patient', email: 'patient@hakim.health', role: 'patient' });
 
@@ -208,18 +219,27 @@ async function main() {
       adminId: admin.id,
       patientId: patient.id,
       doctorAccounts,
-      doctors: LINKED_DOCTORS.length + DIRECTORY_DOCTORS.length
+      doctors: LINKED_DOCTORS.length + DIRECTORY_DOCTORS.length,
+      pendingDoctors: PENDING_DOCTOR_NAMES.length
     },
     'seed complete'
   );
-
-  await disconnectDb();
 }
 
-main().catch(async (error) => {
-  logger.error({ err: error.message }, 'seed failed');
-  if (mongoose.connection.readyState !== 0) {
-    await disconnectDb();
-  }
-  process.exit(1);
-});
+// CLI wrapper: `node src/seed/seed.js` (also `npm run seed`).
+if (import.meta.url === new URL(process.argv[1], 'file://').href) {
+  connectDb(env.mongoUri)
+    .then(seedAll)
+    .then(async () => {
+      if (mongoose.connection.readyState !== 0) {
+        await disconnectDb();
+      }
+    })
+    .catch(async (error) => {
+      logger.error({ err: error.message }, 'seed failed');
+      if (mongoose.connection.readyState !== 0) {
+        await disconnectDb();
+      }
+      process.exit(1);
+    });
+}

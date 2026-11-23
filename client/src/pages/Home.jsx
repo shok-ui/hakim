@@ -46,8 +46,8 @@ export function Home() {
             >
               <option value="">All specialties</option>
               {specialties.map((s) => (
-                <option key={s._id} value={s._id}>
-                  {s.name}
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </select>
@@ -69,8 +69,8 @@ export function Home() {
         <h2>Browse by specialty</h2>
         <div className="chip-row">
           {specialties.map((s) => (
-            <Link key={s._id} className="chip" to="/doctors" state={{ specialty: s._id }}>
-              {s.name}
+            <Link key={s} className="chip" to="/doctors" state={{ specialty: s }}>
+              {s}
             </Link>
           ))}
         </div>

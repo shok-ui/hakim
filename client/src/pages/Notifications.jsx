@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client.js';
-import { formatDateTime } from '../utils/format.js';
+import { formatDateTime, minutesToLabel } from '../utils/format.js';
 
 const TYPE_LABELS = {
   booking: 'New booking',
@@ -65,8 +65,10 @@ export function Notifications() {
                 <span className="badge badge-type">{TYPE_LABELS[n.type] ?? n.type}</span>
                 <strong>{n.title}</strong>
                 {n.body && <span className="muted">{n.body}</span>}
-                {n.appointment?.startAt && (
-                  <span className="muted">Visit: {formatDateTime(n.appointment.startAt)}</span>
+                {n.appointment?.date && (
+                  <span className="muted">
+                    Visit: {n.appointment.date} at {minutesToLabel(n.appointment.startMinute)} (UTC)
+                  </span>
                 )}
               </div>
               <span className="muted notification-date">{formatDateTime(n.createdAt)}</span>

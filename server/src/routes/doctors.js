@@ -73,6 +73,13 @@ router.get(
   })
 );
 
+// GET /api/doctors/specialties - plain specialty strings for the client
+// dropdowns. Must stay registered before /:id so "specialties" is never
+// treated as a doctor id.
+router.get('/specialties', (_req, res) => {
+  res.json({ items: SPECIALTIES });
+});
+
 // GET /api/doctors/meta - filter options for the client dropdowns.
 router.get(
   '/meta',
@@ -147,7 +154,9 @@ router.get(
     }
 
     const doctor = await cached(`doctors:detail:${id}`, 60, async () =>
-      Doctor.findById(id).select(`${CARD_PROJECTION} education`).lean()
+      // isActive must be part of the projection: the guard below checks it,
+      // and an omitted field would wrongly 404 every profile.
+      Doctor.findById(id).select(`${CARD_PROJECTION} education verified isActive`).lean()
     );
 
     if (!doctor || !doctor.isActive) {

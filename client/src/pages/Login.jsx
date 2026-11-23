@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 
+// Demo accounts seeded by the API (all with password Hakim#12345).
 const DEMO_ACCOUNTS = [
-  ['patient@hakim.health', 'Patient@123', 'Patient'],
-  ['sarah.mitchell@hakim.health', 'Doctor@123', 'Doctor'],
-  ['admin@hakim.health', 'Admin@12345', 'Admin']
+  ['patient@hakim.health', 'Hakim#12345', 'Patient'],
+  ['sarah.kamali@hakim.health', 'Hakim#12345', 'Doctor (Cardiology)'],
+  ['david.osei@hakim.health', 'Hakim#12345', 'Doctor (Pediatrics)'],
+  ['leila.farhadi@hakim.health', 'Hakim#12345', 'Doctor (Dermatology)'],
+  ['admin@hakim.health', 'Hakim#12345', 'Admin']
 ];
 
 export function Login() {

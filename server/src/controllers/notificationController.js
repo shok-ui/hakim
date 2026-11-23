@@ -1,54 +1,69 @@
-import { Notification } from '../models/Notification.js';
-import { ApiError } from '../utils/ApiError.js';
-import { asyncHandler } from '../utils/asyncHandler.js';
+import mongoose from 'mongoose';
+import Notification from '../models/notification.js';
+import { asyncHandler, ApiError } from '../utils/errors.js';
+
+// Pagination bounds keep list queries predictable. The unread flag, when
+// "true", restricts the list to notifications without a readAt timestamp.
+function parsePagination(query) {
+  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, Number.parseInt(query.limit, 10) || 20));
+  return { page, limit };
+}
 
 // GET /api/notifications?unread=true&page=&limit=
 export const listNotifications = asyncHandler(async (req, res) => {
-  const { unread = '', page = 1, limit = 20 } = req.query;
-  const pageInt = Math.max(1, parseInt(page, 10) || 1);
-  const limitInt = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
+  const { page, limit } = parsePagination(req.query);
+  const unreadOnly = req.query.unread === 'true';
 
-  const filter = { user: req.user._id };
-  if (unread === 'true') filter.readAt = null;
+  const filter = { user: req.user.id };
+  if (unreadOnly) filter.readAt = null;
 
   const [items, total, unreadCount] = await Promise.all([
     Notification.find(filter)
       .sort({ createdAt: -1 })
-      .skip((pageInt - 1) * limitInt)
-      .limit(limitInt)
-      .populate({ path: 'appointment', select: 'startAt status' })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .populate('appointment', 'date startMinute status')
       .lean(),
     Notification.countDocuments(filter),
-    Notification.countDocuments({ user: req.user._id, readAt: null })
+    Notification.countDocuments({ user: req.user.id, readAt: null })
   ]);
 
-  res.json({ total, unreadCount, page: pageInt, limit: limitInt, items });
+  res.json({ total, unreadCount, page, limit, items });
 });
 
-// GET /api/notifications/unread-count - polled by the client badge.
+// GET /api/notifications/unread-count - polled by the navbar badge.
 export const unreadCount = asyncHandler(async (req, res) => {
-  const count = await Notification.countDocuments({ user: req.user._id, readAt: null });
+  const count = await Notification.countDocuments({ user: req.user.id, readAt: null });
   res.json({ count });
 });
 
-// PATCH /api/notifications/:id/read - pass "all" as the id to mark everything.
+// PATCH /api/notifications/:id/read - pass the literal id "all" to mark every
+// unread notification of the caller as read in one update.
 export const markRead = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   if (id === 'all') {
     await Notification.updateMany(
-      { user: req.user._id, readAt: null },
+      { user: req.user.id, readAt: null },
       { $set: { readAt: new Date() } }
     );
     return res.json({ ok: true });
   }
 
+  if (!mongoose.isValidObjectId(id)) {
+    throw new ApiError(404, 'Notification not found');
+  }
+
   const notification = await Notification.findOneAndUpdate(
-    { _id: id, user: req.user._id, readAt: null },
+    { _id: id, user: req.user.id, readAt: null },
     { $set: { readAt: new Date() } },
     { new: true }
-  );
-  if (!notification) throw ApiError.notFound('Notification not found');
+  ).lean();
+
+  if (!notification) {
+    throw new ApiError(404, 'Notification not found');
+  }
 
   res.json({ notification });
 });

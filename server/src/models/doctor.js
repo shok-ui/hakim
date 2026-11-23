@@ -121,6 +121,13 @@ const doctorSchema = new mongoose.Schema(
       default: 0,
       min: 0
     },
+    // Admin moderation flag. Unverified profiles stay out of the admin stats
+    // for "verified doctors" until an admin approves them from the panel.
+    verified: {
+      type: Boolean,
+      default: true,
+      index: true
+    },
     isActive: {
       type: Boolean,
       default: true,
