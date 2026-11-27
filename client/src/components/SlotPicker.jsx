@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { useI18n } from '../i18n/index.jsx';
 
 // Date strip for the next 14 days plus the bookable slot grid for the
 // selected day, driven by the live slot contract:
@@ -8,7 +9,8 @@ import { api } from '../api/client.js';
 // Booking is delegated to the onBook(date, startMinute) callback so pages
 // decide what happens next (redirect, refresh, error message).
 export function SlotPicker({ doctorId, onBook, disabled }) {
-  const days = getNextDays(14);
+  const { t, dateLocale } = useI18n();
+  const days = getNextDays(14, dateLocale);
   const [activeDay, setActiveDay] = useState(days[0].iso);
   const [slots, setSlots] = useState(null);
   const [error, setError] = useState('');
@@ -76,11 +78,11 @@ export function SlotPicker({ doctorId, onBook, disabled }) {
       {error && <p className="form-error">{error}</p>}
 
       {slots === null ? (
-        <p className="muted">Loading slots...</p>
+        <p className="muted">{t('loadingSlots')}</p>
       ) : noSlots ? (
-        <p className="muted">The doctor does not work on this day. Please check another day.</p>
+        <p className="muted">{t('noWorkingDay')}</p>
       ) : allTaken ? (
-        <p className="muted">No free slots on this day. Please check another day.</p>
+        <p className="muted">{t('noFreeSlots')}</p>
       ) : (
         <div className="slot-grid">
           {slots.map((slot) => (
@@ -100,7 +102,9 @@ export function SlotPicker({ doctorId, onBook, disabled }) {
   );
 }
 
-function getNextDays(n) {
+// Day strip labels follow the active UI locale while the ISO key stays a
+// pure UTC calendar day, matching the server-side slot generation.
+function getNextDays(n, dateLocale) {
   const days = [];
   for (let i = 0; i < n; i++) {
     // Dates are pure UTC calendar days on the server (slot generation and the
@@ -114,8 +118,8 @@ function getNextDays(n) {
     ].join('-');
     days.push({
       iso,
-      dow: d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }),
-      label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+      dow: d.toLocaleDateString(dateLocale, { weekday: 'short', timeZone: 'UTC' }),
+      label: d.toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', timeZone: 'UTC' })
     });
   }
   return days;

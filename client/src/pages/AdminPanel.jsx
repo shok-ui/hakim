@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { useI18n } from '../i18n/index.jsx';
 import { formatDate } from '../utils/format.js';
 
 // Admin view over the live endpoints:
@@ -7,6 +8,7 @@ import { formatDate } from '../utils/format.js';
 // GET /api/admin/doctors/pending -> { items: [{ _id, name, specialty, city,
 //   fee, createdAt, user: { email } }] }
 export function AdminPanel() {
+  const { t, dateLocale } = useI18n();
   const [stats, setStats] = useState(null);
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +40,7 @@ export function AdminPanel() {
     setError('');
     try {
       await api(`/admin/doctors/${id}/verify`, { method: 'PATCH', body: { verified: true } });
-      setFlash('Doctor verified. The profile is now public.');
+      setFlash(t('flashDoctorVerified'));
       await load();
     } catch (err) {
       setError(err.message);
@@ -47,39 +49,39 @@ export function AdminPanel() {
 
   return (
     <div className="container section">
-      <h1>Admin</h1>
+      <h1>{t('adminTitle')}</h1>
 
       {flash && <p className="flash">{flash}</p>}
       {error && <p className="form-error">{error}</p>}
 
       {loading ? (
-        <p className="muted">Loading admin data...</p>
+        <p className="muted">{t('loadingAdmin')}</p>
       ) : (
         <>
           {stats && (
             <div className="stat-row">
               <div className="stat">
                 <span className="stat-num">{stats.patients}</span>
-                <span className="muted">patients</span>
+                <span className="muted">{t('statPatients')}</span>
               </div>
               <div className="stat">
                 <span className="stat-num">{stats.doctors}</span>
-                <span className="muted">verified doctors</span>
+                <span className="muted">{t('statVerifiedDoctors')}</span>
               </div>
               <div className="stat">
                 <span className="stat-num">{stats.pendingDoctors}</span>
-                <span className="muted">awaiting verification</span>
+                <span className="muted">{t('statPendingVerification')}</span>
               </div>
               <div className="stat">
                 <span className="stat-num">{stats.appointments}</span>
-                <span className="muted">appointments</span>
+                <span className="muted">{t('statAppointments')}</span>
               </div>
             </div>
           )}
 
-          <h2>Verification queue</h2>
+          <h2>{t('verificationQueue')}</h2>
           {pending.length === 0 ? (
-            <p className="muted">No doctor profiles waiting for verification.</p>
+            <p className="muted">{t('noPendingDoctors')}</p>
           ) : (
             <div className="appointment-list">
               {pending.map((doctor) => (
@@ -90,8 +92,10 @@ export function AdminPanel() {
                     <span className="muted">
                       {doctor.specialty} - {doctor.city}
                     </span>
-                    <span className="muted">${doctor.fee} per visit</span>
-                    <span className="muted">Submitted {formatDate(doctor.createdAt)}</span>
+                    <span className="muted">{t('feePerVisit', { fee: doctor.fee })}</span>
+                    <span className="muted">
+                      {t('submittedOn', { date: formatDate(doctor.createdAt, dateLocale) })}
+                    </span>
                   </div>
                   <div className="appointment-actions">
                     <button
@@ -99,7 +103,7 @@ export function AdminPanel() {
                       className="btn btn-primary"
                       onClick={() => verify(doctor._id)}
                     >
-                      Verify
+                      {t('actionVerify')}
                     </button>
                   </div>
                 </div>

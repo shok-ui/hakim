@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../api/client.js';
+import { useI18n } from '../i18n/index.jsx';
 import { DoctorCard } from '../components/DoctorCard.jsx';
 
 // Doctor directory with filters, sorting and pagination. Initial filter values
@@ -8,6 +9,7 @@ import { DoctorCard } from '../components/DoctorCard.jsx';
 // q (name search), specialty, city, minRating, sort and page/limit.
 export function Doctors() {
   const location = useLocation();
+  const { t } = useI18n();
   const initial = location.state ?? {};
 
   const [specialties, setSpecialties] = useState([]);
@@ -65,11 +67,11 @@ export function Doctors() {
 
   return (
     <div className="container section">
-      <h1>Find doctors</h1>
+      <h1>{t('doctorsTitle')}</h1>
 
       <div className="filter-bar">
-        <select value={filters.specialty} onChange={set('specialty')} aria-label="Specialty">
-          <option value="">All specialties</option>
+        <select value={filters.specialty} onChange={set('specialty')} aria-label={t('specialty')}>
+          <option value="">{t('heroAllSpecialties')}</option>
           {specialties.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -78,41 +80,43 @@ export function Doctors() {
         </select>
         <input
           type="text"
-          placeholder="City"
+          placeholder={t('city')}
           value={filters.city}
           onChange={set('city')}
-          aria-label="City"
+          aria-label={t('city')}
         />
         <input
           type="text"
-          placeholder="Doctor name"
+          placeholder={t('doctorName')}
           value={filters.q}
           onChange={set('q')}
-          aria-label="Doctor name"
+          aria-label={t('doctorName')}
         />
-        <select value={filters.minRating} onChange={set('minRating')} aria-label="Minimum rating">
-          <option value="">Any rating</option>
-          <option value="4">4 stars and up</option>
-          <option value="3">3 stars and up</option>
+        <select value={filters.minRating} onChange={set('minRating')} aria-label={t('minRating')}>
+          <option value="">{t('anyRating')}</option>
+          <option value="4">{t('rating4Up')}</option>
+          <option value="3">{t('rating3Up')}</option>
         </select>
-        <select value={filters.sort} onChange={set('sort')} aria-label="Sort by">
-          <option value="rating">Top rated</option>
-          <option value="experience">Most experienced</option>
-          <option value="fee_asc">Lowest fee</option>
-          <option value="fee_desc">Highest fee</option>
+        <select value={filters.sort} onChange={set('sort')} aria-label={t('sortBy')}>
+          <option value="rating">{t('sortTopRated')}</option>
+          <option value="experience">{t('sortExperience')}</option>
+          <option value="fee_asc">{t('sortFeeAsc')}</option>
+          <option value="fee_desc">{t('sortFeeDesc')}</option>
         </select>
       </div>
 
       {error && <p className="form-error">{error}</p>}
 
       {loading ? (
-        <p className="muted">Loading doctors...</p>
+        <p className="muted">{t('loadingDoctors')}</p>
       ) : data.items.length === 0 ? (
-        <p className="muted">No doctors match your filters. Try clearing some of them.</p>
+        <p className="muted">{t('noDoctors')}</p>
       ) : (
         <>
           <p className="muted result-count">
-            {data.total} doctor{data.total === 1 ? '' : 's'} found
+            {data.total === 1
+              ? t('oneDoctorFound')
+              : t('manyDoctorsFound', { count: data.total })}
           </p>
           <div className="card-grid">
             {data.items.map((doctor) => (
@@ -127,18 +131,16 @@ export function Doctors() {
                 disabled={data.page <= 1}
                 onClick={() => load(data.page - 1)}
               >
-                Previous
+                {t('prev')}
               </button>
-              <span className="muted">
-                Page {data.page} of {totalPages}
-              </span>
+              <span className="muted">{t('pageOf', { page: data.page, pages: totalPages })}</span>
               <button
                 type="button"
                 className="btn btn-ghost"
                 disabled={data.page >= totalPages}
                 onClick={() => load(data.page + 1)}
               >
-                Next
+                {t('next')}
               </button>
             </div>
           )}

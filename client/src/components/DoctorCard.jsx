@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
+import { useI18n } from '../i18n/index.jsx';
 import { RatingStars } from './RatingStars.jsx';
 
 // Directory card for the live /api/doctors payload: the doctor document
 // itself carries name, specialty (a plain string) and fee.
 export function DoctorCard({ doctor }) {
+  const { t } = useI18n();
   const name = doctor.name ?? 'Doctor';
 
   return (
@@ -21,10 +23,10 @@ export function DoctorCard({ doctor }) {
         <p className="muted">
           {doctor.specialty} - {doctor.city}
         </p>
-        <p className="muted">{doctor.experienceYears} years of experience</p>
+        <p className="muted">{t('yearsOfPractice', { count: doctor.experienceYears })}</p>
         <div className="doctor-card-foot">
           <RatingStars value={doctor.ratingAvg} count={doctor.ratingCount} />
-          <span className="fee">${doctor.fee}</span>
+          <span className="fee">{t('feeAmount', { fee: doctor.fee })}</span>
         </div>
       </div>
     </Link>

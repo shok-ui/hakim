@@ -847,3 +847,129 @@ a:hover {
     width: 100%;
   }
 }
+
+/* ---------- Language switcher ---------- */
+.lang-switch {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+}
+
+.lang-btn {
+  border: none;
+  background: transparent;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lang-btn:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.lang-btn.active {
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+}
+
+/* ---------- Feature grid (Why Hakim) ---------- */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.feature-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+
+.feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+}
+
+.feature-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.feature-card h3 {
+  margin: 0.7rem 0 0.25rem;
+}
+
+.feature-card p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* ---------- FAQ ---------- */
+.faq-list {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 760px;
+}
+
+.faq-item {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+}
+
+.faq-item summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.faq-item[open] summary {
+  color: var(--teal-dark);
+}
+
+.faq-item p {
+  margin: 0.5rem 0 0;
+}
+
+/* ---------- Persian (RTL) ---------- */
+html[dir='rtl'] body {
+  font-family: 'Vazirmatn', 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+
+/* Flip physically-positioned decorations under RTL. */
+html[dir='rtl'] .bell-badge {
+  right: auto;
+  left: -4px;
+}
+
+html[dir='rtl'] .stars-label {
+  margin-left: 0;
+  margin-right: 0.35rem;
+}
+
+html[dir='rtl'] .notification.unread {
+  border-left: none;
+  border-right: 4px solid var(--teal);
+}
+
+html[dir='rtl'] .step-num {
+  margin-inline-start: 0;
+}

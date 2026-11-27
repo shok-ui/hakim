@@ -41,6 +41,7 @@ Hakim is a full-stack medical appointment platform. Patients discover verified d
 - **Notifications** - in-app inbox with an unread badge (polled once a minute): booking confirmations for patients, cancellation alerts for doctors and profile-verification alerts.
 - **Reviews** - only patients with a completed appointment at a doctor can rate them (1-5 stars, one review per patient per doctor). Rating aggregates are stored on the doctor document.
 - **Roles** - patient, doctor and admin. New doctor profiles enter an admin verification queue before becoming public.
+- **Bilingual UI** - full English + Persian (Farsi) interface with a one-click language switcher, right-to-left layout, locale-aware dates and a persisted language choice. English is the default everywhere (code, commits, docs and UI).
 - **Security** - JWT authentication, bcrypt password hashing, role-based access control, strict input validation with Zod and Redis-backed rate limits (global, login, registration and booking).
 
 ## Architecture
@@ -48,9 +49,10 @@ Hakim is a full-stack medical appointment platform. Patients discover verified d
 ```
 client/                 React 18 SPA (Vite, React Router)
   src/api/              fetch wrapper with token handling
-  src/components/       navbar, cards, slot picker, guards
+  src/i18n/             lightweight i18n provider + en/fa dictionaries
+  src/components/       navbar, cards, slot picker, guards, language switcher
   src/pages/            home, directory, profile, auth, dashboards
-  src/styles/           single hand-written stylesheet
+  src/styles/           single hand-written stylesheet (incl. RTL overrides)
 server/                 Node.js 18+ REST API (Express)
   src/config/           env, MongoDB, Redis connections
   src/models/           Mongoose schemas (User, Doctor, Appointment, ...)
@@ -75,7 +77,7 @@ Where Redis is used:
 
 | Layer | Tools |
 | --- | --- |
-| Frontend | React 18, Vite 5, React Router 6, hand-written CSS |
+| Frontend | React 18, Vite 5, React Router 6, hand-written CSS, custom i18n (en/fa + RTL) |
 | Backend | Node.js (ESM), Express 4, Mongoose 8 |
 | Data | MongoDB 7, Redis 7 |
 | Auth | JWT (jsonwebtoken), bcryptjs |
@@ -173,6 +175,22 @@ docker compose up -d --build
 | GET | `/health` | - | Liveness probe |
 
 Errors always return `{ "message": "...", "details": [...]? }` with a proper HTTP status (400, 401, 403, 404, 409, 429, 500).
+
+## Internationalization (English + Persian)
+
+The UI ships in two languages out of the box:
+
+- **English** (`en`) - the default for code, commits, documentation and the interface itself.
+- **Persian / Farsi** (`fa`) - full translation with a right-to-left layout, Persian date formatting (`fa-IR` calendar names) and the Vazirmatn web font.
+
+How it works:
+
+- `client/src/i18n/index.jsx` exposes a small React context (`I18nProvider` + `useI18n`) with a flat `t(key, params)` dictionary lookup and `{param}` interpolation. No runtime dependency, no build step.
+- Dictionaries live in `client/src/i18n/locales/en.js` (source of truth) and `fa.js`. The provider syncs `<html lang>` and `<html dir>` on every switch, so RTL styling (logical-property overrides in CSS) is applied automatically.
+- The active language is persisted in `localStorage` (`hakim.lang`) and restored on the next visit.
+- `npm run check:locales` fails CI when a locale drifts out of parity with English (missing keys, unknown keys or mismatched placeholders).
+
+Adding a third language takes three steps: create `locales/xx.js`, register it in the `LOCALES` map (dictionary + direction + date locale), and add one button to `LanguageSwitcher.jsx`.
 
 ## Configuration
 

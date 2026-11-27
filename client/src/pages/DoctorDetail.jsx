@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useI18n } from '../i18n/index.jsx';
 import { RatingStars } from '../components/RatingStars.jsx';
 import { SlotPicker } from '../components/SlotPicker.jsx';
 import { formatDate, initials } from '../utils/format.js';
@@ -16,6 +17,7 @@ import { formatDate, initials } from '../utils/format.js';
 export function DoctorDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { t, dateLocale } = useI18n();
   const navigate = useNavigate();
   const [doctor, setDoctor] = useState(null);
   const [reviews, setReviews] = useState({ items: [], total: 0, page: 1, pages: 1 });
@@ -53,7 +55,7 @@ export function DoctorDetail() {
       return;
     }
     if (user.role !== 'patient') {
-      throw new Error('Only patient accounts can book appointments');
+      throw new Error(t('onlyPatientsBook'));
     }
     // POST /api/appointments: { doctorId, date 'YYYY-MM-DD', startMinute, reason? }
     await api('/appointments', {
@@ -71,7 +73,7 @@ export function DoctorDetail() {
         method: 'POST',
         body: { doctorId: id, rating: review.rating, comment: review.comment }
       });
-      setReviewMsg('Thanks for your feedback.');
+      setReviewMsg(t('reviewThanks'));
       await load();
       await loadReviews();
     } catch (err) {
@@ -91,7 +93,7 @@ export function DoctorDetail() {
   if (!doctor) {
     return (
       <div className="container section">
-        <p className="muted">Loading doctor profile...</p>
+        <p className="muted">{t('loadingProfile')}</p>
       </div>
     );
   }
@@ -107,25 +109,25 @@ export function DoctorDetail() {
         <div className="detail-info">
           <h1>
             {name}
-            {doctor.verified && <span className="badge badge-verified">Verified</span>}
+            {doctor.verified && <span className="badge badge-verified">{t('verifiedBadge')}</span>}
           </h1>
           <p className="muted">
             {doctor.specialty} - {doctor.city}
           </p>
           <RatingStars value={doctor.ratingAvg} count={doctor.ratingCount} />
-          <p className="fee">${doctor.fee} per visit</p>
+          <p className="fee">{t('feePerVisit', { fee: doctor.fee })}</p>
         </div>
       </div>
 
       <div className="detail-grid">
         <section>
-          <h2>About</h2>
-          <p>{doctor.bio || 'This doctor has not added a biography yet.'}</p>
+          <h2>{t('about')}</h2>
+          <p>{doctor.bio || t('noBio')}</p>
 
-          <h2>Experience</h2>
-          <p>{doctor.experienceYears} years of practice</p>
+          <h2>{t('experience')}</h2>
+          <p>{t('yearsOfPractice', { count: doctor.experienceYears })}</p>
 
-          <h2>Education</h2>
+          <h2>{t('education')}</h2>
           {Array.isArray(doctor.education) && doctor.education.length > 0 ? (
             <ul>
               {doctor.education.map((item) => (
@@ -133,23 +135,23 @@ export function DoctorDetail() {
               ))}
             </ul>
           ) : (
-            <p className="muted">No education details provided.</p>
+            <p className="muted">{t('noEducation')}</p>
           )}
 
           {doctor.clinicAddress && (
             <>
-              <h2>Clinic</h2>
+              <h2>{t('clinic')}</h2>
               <p>{doctor.clinicAddress}</p>
             </>
           )}
 
-          <h2>Reviews ({reviews.total})</h2>
-          {reviews.items.length === 0 && <p className="muted">No reviews yet.</p>}
+          <h2>{t('reviewsTitle', { count: reviews.total })}</h2>
+          {reviews.items.length === 0 && <p className="muted">{t('noReviews')}</p>}
           {reviews.items.map((r) => (
             <div key={r.id} className="review">
               <RatingStars value={r.rating} />
               <p className="muted">
-                {r.patientName ?? 'Patient'} - {formatDate(r.createdAt)}
+                {r.patientName ?? t('patientLabel')} - {formatDate(r.createdAt, dateLocale)}
               </p>
               {r.comment && <p>{r.comment}</p>}
             </div>
@@ -157,27 +159,27 @@ export function DoctorDetail() {
 
           {user?.role === 'patient' && (
             <form className="review-form" onSubmit={submitReview}>
-              <h3>Leave a review</h3>
-              <p className="muted">Reviews unlock after a completed visit with this doctor.</p>
+              <h3>{t('leaveReview')}</h3>
+              <p className="muted">{t('reviewHint')}</p>
               <select
                 value={review.rating}
                 onChange={(e) => setReview({ ...review, rating: Number(e.target.value) })}
-                aria-label="Rating"
+                aria-label={t('rating')}
               >
                 {[5, 4, 3, 2, 1].map((n) => (
                   <option key={n} value={n}>
-                    {n} star{n > 1 ? 's' : ''}
+                    {n === 1 ? t('oneStar') : t('nStars', { count: n })}
                   </option>
                 ))}
               </select>
               <textarea
-                placeholder="How was your visit?"
+                placeholder={t('reviewPlaceholder')}
                 maxLength={600}
                 value={review.comment}
                 onChange={(e) => setReview({ ...review, comment: e.target.value })}
               />
               <button type="submit" className="btn btn-primary">
-                Submit review
+                {t('submitReview')}
               </button>
               {reviewMsg && <p className="muted">{reviewMsg}</p>}
             </form>
@@ -185,8 +187,8 @@ export function DoctorDetail() {
         </section>
 
         <aside>
-          <h2>Book a visit</h2>
-          <p className="muted">Pick a day, then choose a free time slot (UTC).</p>
+          <h2>{t('bookVisit')}</h2>
+          <p className="muted">{t('bookHint')}</p>
           <SlotPicker doctorId={id} onBook={book} />
           {bookError && <p className="form-error">{bookError}</p>}
         </aside>

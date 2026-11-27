@@ -1,8 +1,14 @@
+import { useI18n } from '../i18n/index.jsx';
+
 export function RatingStars({ value = 0, count = 0 }) {
+  const { t } = useI18n();
   const rounded = Math.round(value);
   const title = count
-    ? `${Number(value).toFixed(1)} from ${count} review${count === 1 ? '' : 's'}`
-    : 'No reviews yet';
+    ? t(count === 1 ? 'ratingFromOneReview' : 'ratingFromReviews', {
+        rating: Number(value).toFixed(1),
+        count
+      })
+    : t('noReviewsYet');
 
   return (
     <span className="stars" title={title}>
@@ -12,7 +18,7 @@ export function RatingStars({ value = 0, count = 0 }) {
         </span>
       ))}
       <span className="stars-label">
-        {count > 0 ? `${Number(value).toFixed(1)} (${count})` : 'New'}
+        {count > 0 ? `${Number(value).toFixed(1)} (${count})` : t('newDoctorLabel')}
       </span>
     </span>
   );

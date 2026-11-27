@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useI18n } from '../i18n/index.jsx';
 import { formatAppointmentWhen, formatDate } from '../utils/format.js';
+
+// Status -> translation key for badges in the visit history. Unknown raw
+// statuses fall back to the stored value so nothing breaks server-side.
+const STATUS_KEYS = {
+  completed: 'statusCompleted',
+  cancelled_by_patient: 'statusCancelled',
+  cancelled_by_clinic: 'statusCancelled',
+  no_show: 'statusNoShow'
+};
 
 // Doctor view over the live /api/appointments/doctor endpoint, which returns
 // the doctor's queue with populated patient names. The queue is split here
@@ -9,6 +19,7 @@ import { formatAppointmentWhen, formatDate } from '../utils/format.js';
 // no-show) instead of relying on server-side statuses that no longer exist.
 export function DoctorDashboard() {
   const { user } = useAuth();
+  const { t, dateLocale } = useI18n();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -37,7 +48,7 @@ export function DoctorDashboard() {
     setError('');
     try {
       await api(`/appointments/${id}/cancel`, { method: 'PATCH' });
-      setFlash('Appointment cancelled.');
+      setFlash(t('flashCancelled'));
       await load();
     } catch (err) {
       setError(err.message);
@@ -48,11 +59,7 @@ export function DoctorDashboard() {
     setError('');
     try {
       await api(`/appointments/${id}/status`, { method: 'PATCH', body: { action } });
-      setFlash(
-        action === 'complete'
-          ? 'Visit completed. The patient can now leave a review.'
-          : 'Marked as no-show.'
-      );
+      setFlash(action === 'complete' ? t('flashVisitCompleted') : t('flashNoShow'));
       await load();
     } catch (err) {
       setError(err.message);
@@ -65,21 +72,21 @@ export function DoctorDashboard() {
 
   return (
     <div className="container section">
-      <h1>Dashboard</h1>
-      <p className="muted">Welcome, {user.name}. Manage your schedule below.</p>
+      <h1>{t('dashboardTitle')}</h1>
+      <p className="muted">{t('dashboardWelcome', { name: user.name })}</p>
 
       <div className="stat-row">
         <div className="stat">
           <span className="stat-num">{todayCount}</span>
-          <span className="muted">visits today</span>
+          <span className="muted">{t('visitsToday')}</span>
         </div>
         <div className="stat">
           <span className="stat-num">{booked.length}</span>
-          <span className="muted">active bookings</span>
+          <span className="muted">{t('activeBookings')}</span>
         </div>
         <div className="stat">
           <span className="stat-num">{past.length}</span>
-          <span className="muted">closed visits</span>
+          <span className="muted">{t('closedVisits')}</span>
         </div>
       </div>
 
@@ -87,20 +94,22 @@ export function DoctorDashboard() {
       {error && <p className="form-error">{error}</p>}
 
       {loading ? (
-        <p className="muted">Loading schedule...</p>
+        <p className="muted">{t('loadingSchedule')}</p>
       ) : (
         <>
-          <h2>Active bookings</h2>
+          <h2>{t('activeBookingsTitle')}</h2>
           {booked.length === 0 ? (
-            <p className="muted">No active bookings right now.</p>
+            <p className="muted">{t('noActiveBookings')}</p>
           ) : (
             <div className="appointment-list">
               {booked.map((apt) => (
                 <div key={apt._id} className="appointment-row">
                   <div className="appointment-main">
                     <strong>{apt.patient?.name ?? 'Patient'}</strong>
-                    <span className="muted">{formatAppointmentWhen(apt)}</span>
-                    {apt.reason && <span className="muted">Reason: {apt.reason}</span>}
+                    <span className="muted">{formatAppointmentWhen(apt, dateLocale)}</span>
+                    {apt.reason && (
+                      <span className="muted">{t('reasonLabel', { reason: apt.reason })}</span>
+                    )}
                   </div>
                   <div className="appointment-actions">
                     <button
@@ -108,14 +117,14 @@ export function DoctorDashboard() {
                       className="btn btn-ghost"
                       onClick={() => setStatus('complete')(apt._id)}
                     >
-                      Mark completed
+                      {t('markCompleted')}
                     </button>
                     <button
                       type="button"
                       className="btn btn-danger"
                       onClick={() => cancel(apt._id)}
                     >
-                      Cancel
+                      {t('actionCancel')}
                     </button>
                   </div>
                 </div>
@@ -123,26 +132,31 @@ export function DoctorDashboard() {
             </div>
           )}
 
-          <h2>Visit history</h2>
+          <h2>{t('visitHistoryTitle')}</h2>
           {past.length === 0 ? (
-            <p className="muted">No past appointments yet.</p>
+            <p className="muted">{t('noPastAppointments')}</p>
           ) : (
             <div className="appointment-list">
-              {past.slice(0, 20).map((apt) => (
-                <div key={apt._id} className="appointment-row">
-                  <div className="appointment-main">
-                    <strong>{apt.patient?.name ?? 'Patient'}</strong>
-                    <span className="muted">{formatAppointmentWhen(apt)}</span>
+              {past.slice(0, 20).map((apt) => {
+                const statusKey = STATUS_KEYS[apt.status];
+                return (
+                  <div key={apt._id} className="appointment-row">
+                    <div className="appointment-main">
+                      <strong>{apt.patient?.name ?? 'Patient'}</strong>
+                      <span className="muted">{formatAppointmentWhen(apt, dateLocale)}</span>
+                    </div>
+                    <div className="appointment-actions">
+                      <span className="badge badge-pending">
+                        {statusKey ? t(statusKey) : apt.status.replaceAll('_', ' ')}
+                      </span>
+                    </div>
                   </div>
-                  <div className="appointment-actions">
-                    <span className="badge badge-pending">{apt.status.replaceAll('_', ' ')}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          <p className="muted">Today is {formatDate(todayStr)} (UTC). Times are shown in UTC.</p>
+          <p className="muted">{t('dashboardTodayIs', { date: formatDate(todayStr, dateLocale) })}</p>
         </>
       )}
     </div>

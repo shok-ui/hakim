@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar.jsx';
 import { Footer } from './components/Footer.jsx';
 import { RequireRole } from './components/RequireRole.jsx';
 import { useAuth } from './context/AuthContext.jsx';
+import { useI18n } from './i18n/index.jsx';
 import { Home } from './pages/Home.jsx';
 import { Doctors } from './pages/Doctors.jsx';
 import { DoctorDetail } from './pages/DoctorDetail.jsx';
@@ -16,9 +17,10 @@ import { NotFound } from './pages/NotFound.jsx';
 
 export function App() {
   const { ready } = useAuth();
+  const { t } = useI18n();
 
   // Wait for the auth bootstrap before rendering any route.
-  if (!ready) return <div className="page-loading">Loading...</div>;
+  if (!ready) return <div className="page-loading">{t('loading')}</div>;
 
   return (
     <div className="app-shell">

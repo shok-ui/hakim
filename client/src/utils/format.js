@@ -1,4 +1,8 @@
-// Small formatting helpers shared across pages.
+// Small formatting helpers shared across pages. Every helper accepts an
+// optional locale (defaults to en-US) so pages render dates in the active
+// UI language while the underlying values stay stable.
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 export function initials(name = '') {
   return (
@@ -11,11 +15,21 @@ export function initials(name = '') {
   );
 }
 
-export function formatDate(iso) {
+export function formatDate(iso, locale = 'en-US') {
   if (!iso) return '';
-  // Appointment dates arrive as "YYYY-MM-DD"; parsing with T00:00 keeps the
-  // calendar day stable instead of shifting with the local timezone.
-  return new Date(iso).toLocaleDateString('en-US', {
+  // Date-only strings ("YYYY-MM-DD", the appointment-day format) are pinned
+  // to UTC midnight so the calendar day never shifts; full timestamps keep
+  // rendering in the viewer's local timezone as before.
+  if (DATE_ONLY.test(iso)) {
+    return new Date(`${iso}T00:00:00Z`).toLocaleDateString(locale, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC'
+    });
+  }
+  return new Date(iso).toLocaleDateString(locale, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -23,14 +37,14 @@ export function formatDate(iso) {
   });
 }
 
-export function formatTime(iso) {
+export function formatTime(iso, locale = 'en-US') {
   if (!iso) return '';
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
 }
 
-export function formatDateTime(iso) {
+export function formatDateTime(iso, locale = 'en-US') {
   if (!iso) return '';
-  return `${formatDate(iso)}, ${formatTime(iso)}`;
+  return `${formatDate(iso, locale)}, ${formatTime(iso, locale)}`;
 }
 
 // Minutes since midnight (UTC) to a zero-padded 24h label, matching the
@@ -44,8 +58,8 @@ export function minutesToLabel(minute) {
 
 // Full label for an appointment keyed by date string + start minute, the
 // shape returned by /api/appointments/mine and /api/appointments/doctor.
-export function formatAppointmentWhen(when) {
+export function formatAppointmentWhen(when, locale = 'en-US') {
   if (!when?.date) return '';
   const time = minutesToLabel(when.startMinute);
-  return time ? `${formatDate(when.date)} at ${time} (UTC)` : formatDate(when.date);
+  return time ? `${formatDate(when.date, locale)} - ${time} (UTC)` : formatDate(when.date, locale);
 }
